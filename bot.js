@@ -3,70 +3,95 @@ const mineflayer = require('mineflayer');
 const { pathfinder, goals } = require('mineflayer-pathfinder');
 const http = require('http');
 
-const config = {
-  host: process.env.MC_HOST || 'localhost',
-  port: parseInt(process.env.MC_PORT || '25565', 10),
-  username: process.env.MC_USERNAME || 'AFKBot',
-  version: process.env.MC_VERSION || '1.20.1',
-  auth: process.env.MC_AUTH || 'offline',
-};
+// --- CONFIG: array of servers ---
+// Loaded from env var SERVERS (JSON) or falls back to defaults
+let servers = [];
+try {
+  servers = JSON.parse(process.env.SERVERS || '[]');
+} catch (e) {
+  console.error('[Config] Failed to parse SERVERS env var:', e.message);
+}
 
-let bot;
-let reconnectTimer;
-let healthServer;
+if (servers.length === 0) {
+  console.error('[Config] No servers configured. Set SERVERS env var as JSON.');
+  process.exit(1);
+}
 
-function createBot() {
-  console.log(`[Bot] Connecting to ${config.host}:${config.port} as ${config.username}...`);
-  bot = mineflayer.createBot({
-    host: config.host,
-    port: config.port,
-    username: config.username,
-    version: config.version,
-    auth: config.auth,
+// --- HEALTH SERVER (keeps Render awake) ---
+const port = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    status: 'ok',
+    bots: servers.map(s => ({ host: s.host, username: s.username })),
+  }));
+}).listen(port, () => console.log(`[Health] Listening on port ${port}`));
+
+// --- BOT MANAGER ---
+const bots = {}; // key = server label
+
+function startBot(server) {
+  const label = server.label || `${server.host}:${server.port}`;
+  console.log(`[${label}] Connecting as ${server.username}...`);
+
+  const bot = mineflayer.createBot({
+    host: server.host,
+    port: server.port,
+    username: server.username,
+    version: server.version,
+    auth: server.auth || 'offline',
   });
 
   bot.loadPlugin(pathfinder);
+  bots[label] = { bot, server, reconnectTimer: null };
 
   bot.once('spawn', () => {
-    console.log(`[Bot] ${bot.username} joined.`);
-    startAntiAFK();
-    startSimpleTasks();
+    console.log(`[${label}] ${bot.username} joined.`);
+    startAntiAFK(bot, label);
+    startSimpleTasks(bot, label);
   });
 
   bot.on('chat', (username, message) => {
     if (username === bot.username) return;
-    console.log(`[Chat] ${username}: ${message}`);
+    console.log(`[${label}] ${username}: ${message}`);
     if (message.toLowerCase().includes('come')) {
       const player = bot.players[username]?.entity;
       if (player) {
         bot.chat(`Coming, ${username}!`);
         const { GoalNear } = goals;
-        bot.pathfinder.setGoal(new GoalNear(player.position.x, player.position.y, player.position.z, 1));
+        bot.pathfinder.setGoal(new GoalNear(
+          player.position.x, player.position.y, player.position.z, 1
+        ));
       }
     }
   });
 
   bot.on('end', (reason) => {
-    console.log(`[Bot] Disconnected: ${reason}. Reconnecting in 10s...`);
-    scheduleReconnect(10000);
+    console.log(`[${label}] Disconnected: ${reason}. Reconnecting in 10s...`);
+    scheduleReconnect(label, 10000);
   });
 
   bot.on('kicked', (reason) => {
-    console.log(`[Bot] Kicked: ${JSON.stringify(reason)}. Reconnecting in 30s...`);
-    scheduleReconnect(30000);
+    console.log(`[${label}] Kicked: ${JSON.stringify(reason)}. Reconnecting in 30s...`);
+    scheduleReconnect(label, 30000);
   });
 
   bot.on('error', (err) => {
-    console.error('[Bot] Error:', err.message);
+    console.error(`[${label}] Error: ${err.message}`);
   });
 }
 
-function scheduleReconnect(delay) {
-  clearTimeout(reconnectTimer);
-  reconnectTimer = setTimeout(createBot, delay);
+function scheduleReconnect(label, delay) {
+  const entry = bots[label];
+  if (!entry) return;
+  clearTimeout(entry.reconnectTimer);
+  entry.reconnectTimer = setTimeout(() => {
+    console.log(`[${label}] Reconnecting now...`);
+    startBot(entry.server);
+  }, delay);
 }
 
-function startAntiAFK() {
+function startAntiAFK(bot, label) {
   setInterval(() => {
     if (bot && bot.entity) {
       bot.setControlState('jump', true);
@@ -81,29 +106,18 @@ function startAntiAFK() {
   }, 60000);
 }
 
-function startSimpleTasks() {
+function startSimpleTasks(bot, label) {
   setInterval(() => {
     if (bot) bot.swingArm();
   }, 30000);
 }
 
-function startHealthServer() {
-  const port = process.env.PORT || 3000;
-  healthServer = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot is running.\n');
-  });
-  healthServer.listen(port, () => {
-    console.log(`[Health] Listening on port ${port}`);
-  });
-}
+// --- BOOT ALL BOTS ---
+servers.forEach(startBot);
 
-startHealthServer();
-createBot();
-
+// --- GRACEFUL SHUTDOWN ---
 process.on('SIGINT', () => {
-  console.log('[Bot] Shutting down...');
-  if (bot) bot.quit();
-  if (healthServer) healthServer.close();
+  console.log('Shutting down...');
+  Object.values(bots).forEach(({ bot }) => bot && bot.quit());
   process.exit();
 });
