@@ -40,6 +40,7 @@ function startBot(server) {
     username: server.username,
     version: server.version,
     auth: server.auth || 'offline',
+    physicsEnabled: false,
   });
 
   bot.loadPlugin(pathfinder);
