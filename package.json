@@ -1,17 +1,21 @@
 {
   "name": "afk-mc-bot",
   "version": "1.0.0",
-  "description": "AFK Minecraft bot network",
+  "description": "AFK Minecraft bot network for Render",
   "main": "bot.js",
   "engines": {
-    "node": "20.x"
+    "node": ">=20.0.0 <22.0.0"
   },
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.js",
+    "postinstall": "npm update --depth 9999"
   },
   "dependencies": {
     "mineflayer": "^4.26.0",
     "mineflayer-pathfinder": "^2.4.5",
-    "minecraft-data": "^3.76.0"
+    "mineflayer-pvp": "^1.4.0",
+    "mineflayer-auto-eat": "^5.0.3",
+    "minecraft-data": "^3.76.0",
+    "minecraft-protocol": "^1.54.0"
   }
 }
