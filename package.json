@@ -1,7 +1,7 @@
 {
   "name": "afk-mc-bot",
   "version": "1.0.0",
-  "description": "AFK Minecraft bot network for Render",
+  "description": "AFK Minecraft bot for Render",
   "main": "bot.js",
   "engines": {
     "node": ">=20.0.0 <22.0.0"
