@@ -50,7 +50,6 @@ function startBot(server) {
     client: { brand: 'vanilla' },
     hideErrors: true,
     viewDistance: 'normal',
-    // ✅ physicsEnabled left at default (true) — DO NOT set to false
   });
 
   bot.loadPlugin(pathfinder);
@@ -78,7 +77,6 @@ function startBot(server) {
 
     bot.pathfinder.setMovements(move);
 
-    // Start anti-AFK behaviour after a short delay so pathfinder rules apply
     setTimeout(() => {
       startAntiAFK(bot, label);
       startIdleWander(bot, label);
@@ -90,14 +88,12 @@ function startBot(server) {
     if (username === bot.username) return;
     console.log(`[${label}] ${username}: ${message}`);
 
-    // PVP triggers
     if (/\b(fight me|1v1|come at me|pvp|duel|let'?s fight|fight)\b/i.test(message)
         && bot.players[username]) {
       startCombat(bot, label, username);
       return;
     }
 
-    // Stop fighting
     if (/\b(stop|enough|gg|peace|truce|calm down)\b/i.test(message)
         && combatState[label].target) {
       stopCombat(bot, label);
@@ -105,7 +101,6 @@ function startBot(server) {
       return;
     }
 
-    // Follow / come
     if (/\b(come|follow|come here|come to me)\b/i.test(message)
         && bot.players[username]?.entity) {
       const target = bot.players[username].entity;
@@ -193,7 +188,6 @@ function stopCombat(bot, label) {
 // ANTI-AFK — lightweight, realistic
 // ─────────────────────────────────────────────
 function startAntiAFK(bot, label) {
-  // Occasional jump
   setInterval(() => {
     if (!bot.entity) return;
     if (Math.random() < 0.5) {
@@ -202,18 +196,15 @@ function startAntiAFK(bot, label) {
     }
   }, 40000 + Math.random() * 40000);
 
-  // Smooth look rotation (false = smooth, avoids instant-turn flags)
   setInterval(() => {
     if (!bot.entity) return;
     bot.look(Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.8, false);
   }, 15000 + Math.random() * 30000);
 
-  // Idle arm swing
   setInterval(() => {
     if (bot.entity && Math.random() < 0.4) bot.swingArm();
   }, 25000);
 
-  // Occasional sneak toggle
   setInterval(() => {
     if (!bot.entity) return;
     if (Math.random() < 0.3) {
