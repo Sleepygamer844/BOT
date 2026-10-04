@@ -1,10 +1,13 @@
-// bot.js — AFK Minecraft bot (no AI, lightweight, realistic movement)
-const mineflayer = require('mineflayer');
-const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
-const { plugin: pvpPlugin } = require('mineflayer-pvp');
-const { plugin: autoEatPlugin } = require('mineflayer-auto-eat');
-const http = require('http');
-const mcDataLoader = require('minecraft-data');
+// bot.js — ESM version (no AI, lightweight, realistic movement)
+import mineflayer from 'mineflayer';
+import pathfinderPkg from 'mineflayer-pathfinder';
+import pvpPkg from 'mineflayer-pvp';
+import { plugin as autoEatPlugin } from 'mineflayer-auto-eat';
+import http from 'http';
+import mcDataLoader from 'minecraft-data';
+
+const { pathfinder, Movements, goals } = pathfinderPkg;
+const { plugin: pvpPlugin } = pvpPkg;
 
 // ─────────────────────────────────────────────
 // CONFIG — from Render environment variables
@@ -80,12 +83,13 @@ function startBot(server) {
 
     bot.pathfinder.setMovements(move);
 
-    // Auto-eat config — stops starvation death and "starving bot" flags
-    bot.autoEat.options = {
+    // Auto-eat config (v5 API — use setOpts, not .options)
+    bot.autoEat.setOpts({
       priority: 'foodPoints',
-      startAt: 14,
+      minHunger: 14,
       bannedFood: ['golden_apple', 'enchanted_golden_apple'],
-    };
+    });
+    bot.autoEat.enableAuto();
 
     // Delay actions to let pathfinder rules apply fully
     setTimeout(() => {
