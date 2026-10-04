@@ -8,9 +8,7 @@
     "node": ">=20.0.0 <22.0.0"
   },
   "scripts": {
-    "start": "node bot.js",
-    "clean": "rm -rf node_modules package-lock.json",
-    "reinstall": "npm run clean && npm install"
+    "start": "node bot.js"
   },
   "dependencies": {
     "mineflayer": "4.26.0",
