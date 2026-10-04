@@ -1,5 +1,5 @@
-// bot.js — Minimal AFK bot: movement + anti-AFK (+ optional PVP)
-import mineflayer from 'mineflayer';
+// bot.js — Final version with robust ESM import
+import { createBot } from 'mineflayer'; // ✅ Named import for reliability
 import pathfinderPkg from 'mineflayer-pathfinder';
 import pvpPkg from 'mineflayer-pvp';
 import http from 'http';
@@ -41,7 +41,7 @@ function startBot(server) {
   const label = server.label || `${server.host}:${server.port}`;
   console.log(`[${label}] Connecting as ${server.username}...`);
 
-  const bot = mineflayer.createBot({
+  const bot = createBot({ // ✅ Using named import
     host: server.host,
     port: server.port,
     username: server.username,
