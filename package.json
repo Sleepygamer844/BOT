@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "AFK Minecraft bot for Render",
   "main": "bot.js",
+  "type": "module",
   "engines": {
     "node": ">=20.0.0 <22.0.0"
   },
