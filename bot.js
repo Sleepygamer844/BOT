@@ -1,5 +1,5 @@
 // bot.js — Final version with robust ESM import
-import { createBot } from 'mineflayer'; // ✅ Named import for reliability
+import { createBot } from 'mineflayer'; // ✅ CRITICAL FIX: Named import
 import pathfinderPkg from 'mineflayer-pathfinder';
 import pvpPkg from 'mineflayer-pvp';
 import http from 'http';
@@ -23,7 +23,7 @@ if (servers.length === 0) {
 }
 
 // ─────────────────────────────────────────────
-// HEALTH SERVER — keeps Render awake
+// HEALTH SERVER
 // ─────────────────────────────────────────────
 const port = process.env.PORT || 3000;
 const bots = {};
@@ -65,7 +65,7 @@ function startBot(server) {
     const mcData = mcDataLoader(bot.version);
     const move = new Movements(bot, mcData);
 
-    // Anti-kick movement config — keeps packets vanilla-like
+    // Anti-kick movement config
     move.canDig = false;
     move.allow1by1towers = false;
     move.allowParkour = true;
@@ -185,7 +185,7 @@ function stopCombat(bot, label) {
 }
 
 // ─────────────────────────────────────────────
-// ANTI-AFK — lightweight, realistic
+// ANTI-AFK
 // ─────────────────────────────────────────────
 function startAntiAFK(bot, label) {
   setInterval(() => {
@@ -215,7 +215,7 @@ function startAntiAFK(bot, label) {
 }
 
 // ─────────────────────────────────────────────
-// IDLE WANDER — real walking via pathfinder
+// IDLE WANDER
 // ─────────────────────────────────────────────
 function startIdleWander(bot, label) {
   const wander = async () => {
