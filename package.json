@@ -1,6 +1,8 @@
 {
   "name": "afk-mc-bot",
   "version": "1.0.0",
+  "description": "AFK Minecraft bot network",
+  "main": "bot.js",
   "engines": {
     "node": "20.x"
   },
