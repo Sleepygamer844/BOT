@@ -1,8 +1,7 @@
-// bot.js — ESM version (no AI, lightweight, realistic movement)
+// bot.js — Minimal AFK bot: movement + anti-AFK (+ optional PVP)
 import mineflayer from 'mineflayer';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import pvpPkg from 'mineflayer-pvp';
-import { plugin as autoEatPlugin } from 'mineflayer-auto-eat';
 import http from 'http';
 import mcDataLoader from 'minecraft-data';
 
@@ -10,7 +9,7 @@ const { pathfinder, Movements, goals } = pathfinderPkg;
 const { plugin: pvpPlugin } = pvpPkg;
 
 // ─────────────────────────────────────────────
-// CONFIG — from Render environment variables
+// CONFIG
 // ─────────────────────────────────────────────
 let servers = [];
 try {
@@ -27,16 +26,13 @@ if (servers.length === 0) {
 // HEALTH SERVER — keeps Render awake
 // ─────────────────────────────────────────────
 const port = process.env.PORT || 3000;
+const bots = {};
+const combatState = {};
+
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ status: 'ok', bots: Object.keys(bots) }));
 }).listen(port, () => console.log(`[Health] Listening on ${port}`));
-
-// ─────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────
-const bots = {};
-const combatState = {};
 
 // ─────────────────────────────────────────────
 // BOT MANAGER
@@ -51,47 +47,38 @@ function startBot(server) {
     username: server.username,
     version: server.version,
     auth: server.auth || 'offline',
-    // ✅ physicsEnabled defaults to true — DO NOT set it to false
     client: { brand: 'vanilla' },
     hideErrors: true,
     viewDistance: 'normal',
+    // ✅ physicsEnabled left at default (true) — DO NOT set to false
   });
 
   bot.loadPlugin(pathfinder);
   bot.loadPlugin(pvpPlugin);
-  bot.loadPlugin(autoEatPlugin);
 
   bots[label] = { bot, server, reconnectTimer: null };
   combatState[label] = { target: null, until: 0 };
 
-  // ── SPAWN: configure movement & start behaviour ──
+  // ── SPAWN ──
   bot.once('spawn', () => {
     console.log(`[${label}] ${bot.username} joined.`);
 
     const mcData = mcDataLoader(bot.version);
     const move = new Movements(bot, mcData);
 
-    // Critical anti-kick settings — makes movement look vanilla
-    move.canDig = false;               // don't break blocks while pathing
-    move.allow1by1towers = false;      // no pillar-jumping
-    move.allowParkour = true;          // jump gaps like a player
-    move.allowSprinting = true;        // sprint when far
+    // Anti-kick movement config — keeps packets vanilla-like
+    move.canDig = false;
+    move.allow1by1towers = false;
+    move.allowParkour = true;
+    move.allowSprinting = true;
     move.canOpenDoors = true;
     move.canOpenGates = true;
-    move.allowFreeMotion = false;      // 🚨 MUST be false — prevents flying flags
-    move.scafoldingBlocks = [];        // no block placing for path
+    move.allowFreeMotion = false;   // 🚨 prevents "flying" flags
+    move.scafoldingBlocks = [];
 
     bot.pathfinder.setMovements(move);
 
-    // Auto-eat config (v5 API — use setOpts, not .options)
-    bot.autoEat.setOpts({
-      priority: 'foodPoints',
-      minHunger: 14,
-      bannedFood: ['golden_apple', 'enchanted_golden_apple'],
-    });
-    bot.autoEat.enableAuto();
-
-    // Delay actions to let pathfinder rules apply fully
+    // Start anti-AFK behaviour after a short delay so pathfinder rules apply
     setTimeout(() => {
       startAntiAFK(bot, label);
       startIdleWander(bot, label);
@@ -104,46 +91,48 @@ function startBot(server) {
     console.log(`[${label}] ${username}: ${message}`);
 
     // PVP triggers
-    const pvpTriggers = /\b(fight me|1v1|come at me|pvp|duel|let'?s fight|fight)\b/i;
-    if (pvpTriggers.test(message) && bot.players[username]) {
+    if (/\b(fight me|1v1|come at me|pvp|duel|let'?s fight|fight)\b/i.test(message)
+        && bot.players[username]) {
       startCombat(bot, label, username);
       return;
     }
 
     // Stop fighting
-    if (/\b(stop|enough|gg|peace|truce|calm down)\b/i.test(message) && combatState[label].target) {
+    if (/\b(stop|enough|gg|peace|truce|calm down)\b/i.test(message)
+        && combatState[label].target) {
       stopCombat(bot, label);
       bot.chat(`gg ${username}`);
       return;
     }
 
     // Follow / come
-    if (/\b(come|follow|come here|come to me)\b/i.test(message) && bot.players[username]?.entity) {
+    if (/\b(come|follow|come here|come to me)\b/i.test(message)
+        && bot.players[username]?.entity) {
       const target = bot.players[username].entity;
       bot.chat(`On my way, ${username}.`);
       try {
         await bot.pathfinder.goto(new goals.GoalNear(
           target.position.x, target.position.y, target.position.z, 2
         ));
-      } catch (e) { /* unreachable */ }
+      } catch {}
       return;
     }
   });
 
-  // ── REACT TO BEING ATTACKED ──
+  // ── FIGHT BACK WHEN HIT ──
   bot.on('entityHurt', (entity) => {
     if (entity !== bot.entity) return;
     if (combatState[label].target) return;
     const attacker = bot.nearestEntity(e =>
       e.type === 'player' && e.username && e.username !== bot.username
     );
-    if (attacker && attacker.username) {
+    if (attacker?.username) {
       console.log(`[${label}] Attacked — fighting back vs ${attacker.username}`);
       startCombat(bot, label, attacker.username, 8000);
     }
   });
 
-  // ── LOW HP RETREAT ──
+  // ── RETREAT AT LOW HP ──
   bot.on('health', () => {
     const cs = combatState[label];
     if (cs.target && bot.health < 6) {
@@ -163,7 +152,7 @@ function startBot(server) {
     }
   });
 
-  // ── RECONNECT LOGIC ──
+  // ── RECONNECT ──
   bot.on('end', (reason) => {
     console.log(`[${label}] Disconnected: ${reason}. Reconnecting in 10s...`);
     scheduleReconnect(label, 10000);
@@ -176,7 +165,7 @@ function startBot(server) {
 }
 
 // ─────────────────────────────────────────────
-// COMBAT HELPERS
+// COMBAT
 // ─────────────────────────────────────────────
 function startCombat(bot, label, username, durationMs = 30000) {
   const target = bot.players[username]?.entity;
@@ -190,9 +179,7 @@ function startCombat(bot, label, username, durationMs = 30000) {
   combatState[label].until = Date.now() + durationMs;
 
   setTimeout(() => {
-    if (combatState[label].until <= Date.now()) {
-      stopCombat(bot, label);
-    }
+    if (combatState[label].until <= Date.now()) stopCombat(bot, label);
   }, durationMs + 100);
 }
 
@@ -215,7 +202,7 @@ function startAntiAFK(bot, label) {
     }
   }, 40000 + Math.random() * 40000);
 
-  // Smooth look rotation (false = smooth, avoids anti-cheat flags)
+  // Smooth look rotation (false = smooth, avoids instant-turn flags)
   setInterval(() => {
     if (!bot.entity) return;
     bot.look(Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.8, false);
@@ -244,7 +231,6 @@ function startIdleWander(bot, label) {
     if (!bot.entity || combatState[label].target) {
       return setTimeout(wander, 20000);
     }
-    // Don't wander if a player is nearby — looks suspicious
     const nearbyPlayer = bot.nearestEntity(e =>
       e.type === 'player' && e.position.distanceTo(bot.entity.position) < 12
     );
@@ -259,7 +245,7 @@ function startIdleWander(bot, label) {
 
     try {
       await bot.pathfinder.goto(new goals.GoalNear(x, y, z, 1));
-    } catch { /* ignore unreachable */ }
+    } catch {}
     setTimeout(wander, 15000 + Math.random() * 25000);
   };
   setTimeout(wander, 10000);
